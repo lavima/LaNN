@@ -1,0 +1,28 @@
+[project]
+name = "lann"
+version = "0.0.1"
+description = "LaViMa Neural Network playground"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { file = "LICENSE" }
+keywords = ["nn", "jax"]
+authors = [
+  { name = "Lars Vidar Magnusson", email = "lars.v.magnusson@hiof.no" },
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+		"jax",
+    "numpy",
+]
+
+[project.urls]
+Homepage = "https://github.com/lavima/LaNN"
+Issues = "https://github.com/lavima/LaNN/issues"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
