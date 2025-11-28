@@ -5,7 +5,7 @@ import jax.numpy as jnp
 from ..activation import relu
 from .module import Module
 
-class Dense(Module):
+class Linear(Module):
     def __init__(self, num_in, num_out, activation=relu, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.num_in = num_in
