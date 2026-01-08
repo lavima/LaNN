@@ -2,11 +2,24 @@ import jax
 import jax.random as jr
 import jax.numpy as jnp
 
-from ..activation import relu
+from typing import Callable
+from dataclasses import dataclass,field
+from jax.tree_util import register_dataclass
+from jax.typing import ArrayLike
+
+from ..activation import linear,relu
 from .module import Module
 
+@register_dataclass
+@dataclass
 class Linear(Module):
-    def __init__(self, num_in, num_out, activation=relu, random_key=jr.key(0)):
+    weights : jax.Array
+    bias : jax.Array
+    num_in : int = field(metadata=dict(static=True))
+    num_out : int = field(metadata=dict(static=True))
+    activation : Callable[[jax.Array], jax.Array] = field(metadata=dict(static=True))
+
+    def __init__(self, num_in:int, num_out:int, activation:Callable[[jax.Array], jax.Array]=linear, random_key:ArrayLike=jr.key(0)):
         self.num_in = num_in
         self.num_out = num_out
         self.activation = activation

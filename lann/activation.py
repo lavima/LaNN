@@ -8,3 +8,6 @@ def softmax(x):
     
 def relu(x):
     return jnp.maximum(x, 0)
+
+def linear(x):
+    return x

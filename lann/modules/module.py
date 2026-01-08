@@ -1,32 +1,43 @@
 import jax
 import jax.random as jr
 
-from lann.utils import dot_dict
+from dataclasses import dataclass
+from jax.tree_util import register_dataclass
+
 
 class Variable:
     def __init__(self, value):
         self.value = value
 
-
-@jax.tree_util.register_pytree_node_class
+@register_dataclass
+@dataclass
 class Module():
     # def __init__(self):
 
-    def tree_flatten(self):
-        children = []
-        aux = []
+    # def __init_subclass__(cls, **kwargs):
+    #     super().__init_subclass__(**kwargs)
+    #     register_dataclass(cls)
 
-        for var in vars(self):
-            if isinstance(var, (list, set, dict, Module)):
-                children.append(var)
-            else:
-                aux.append(var)
-
-        return (children, aux)
-
-    @classmethod
-    def tree_unflatten(cls, aux_data, children):
-        return cls(*children)
+    # def tree_flatten(self):
+    #     children = []
+    #     aux = []
+    #
+    #     for var in vars(self):
+    #         if isinstance(var, (list, set, dict, Module)):
+    #             children.append(var)
+    #         else:
+    #             aux.append(var)
+    #
+    #     return (children, aux)
+    #
+    # @classmethod
+    # def tree_unflatten(cls, aux_data, children):
+    #     module = object.__new__(cls)
+    #
+    #     for var in vars(module):
+    #         if isinstance(var, (list, set, dict, Module)):
+    #
+    #     return module 
 
     def describe():
         print('test')
@@ -42,7 +53,11 @@ def iter_modules(module:Module):
                 if isinstance(item, Module):
                     yield from iter_modules(item)
     
+@register_dataclass
+@dataclass
 class Sequence(Module):
+    layers : list[Module]
+
     def __init__(self, layers):
         self.layers = layers
 
