@@ -18,7 +18,7 @@ random_key, random_linear1, random_linear2, random_x, random_y = jr.split(random
 
 # x = jr.normal(random_x, (100, 3))
 # y = jr.randint(random_y, (100, 1), minval=0, maxval=1).astype(jnp.float32)
-x, y = make_classification(n_samples=1000, n_features=20)
+x, y = make_classification(n_samples=10000, n_features=20)
 y = (y > 0).astype(jnp.float32)
 x = jnp.array(x)
 y = jnp.array(y)
@@ -28,7 +28,8 @@ print(y[0:5])
 
 model = Sequence([
     Linear(20, 10, activation=relu, random_key=random_linear1),
-    Linear(10, 1, activation=linear, random_key=random_linear2)])
+    Linear(10, 5, activation=relu, random_key=random_linear1),
+    Linear(5, 1, activation=linear, random_key=random_linear2)])
 
 # for module in iter_modules(model):
 #     print(module)
