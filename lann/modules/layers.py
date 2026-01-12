@@ -3,15 +3,12 @@ import jax.random as jr
 import jax.numpy as jnp
 
 from typing import Callable
-from dataclasses import dataclass,field
-from jax.tree_util import register_dataclass
+from dataclasses import field
 from jax.typing import ArrayLike
 
 from ..activation import linear,relu
 from .module import Module
 
-@register_dataclass
-@dataclass
 class Linear(Module):
     weights : jax.Array
     bias : jax.Array
