@@ -10,8 +10,8 @@ from ..activation import linear,relu
 from .module import Module
 
 class Linear(Module):
-    weights : jax.Array
-    bias : jax.Array
+    # weights : jax.Array
+    # bias : jax.Array
     num_in : int = field(metadata=dict(static=True))
     num_out : int = field(metadata=dict(static=True))
     activation : Callable[[jax.Array], jax.Array] = field(metadata=dict(static=True))

@@ -1,6 +1,10 @@
 import jax
 import jax.numpy as jnp
 
+def sigmoid(x):
+    # 1/(1+e^x)
+    jax.lax.logistic(x)
+
 def softmax(x):
     # ensures numerical stability by making the values range (-inf, 0]
     x = x - jnp.max(x, axis=-1, keepdims=True)
