@@ -1,28 +1,16 @@
+import logging
 import jax
 import jax.numpy as jnp
-from abc import ABC, abstractmethod
 
-from dataclasses import dataclass
-from jax.tree_util import register_dataclass
+from .pytree import Pytree, static_field
 
-def accuracy(logits, y):
-    classification = jnp.argmax(logits)
-    num_correct = classification == y
-    return num_correct/len(logits)
+logger = logging.getLogger(__name__)
 
-class Metric:
-    def __init__(self, metric_fun, state):
-        self.metric_fun = metric_fun
-        self.state = state
-
-    @classmethod
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-        register_pytree_node_class(cls)
-        # cls.tree_flatten = Metric.tree_flatten
-        # cls.tree_unflatten = Metric.tree_unflatten
+def log_accuracy_update(num_correct, num_total, classification_shape, y_shape):
+    logger.debug(f'num_correct: {num_correct} num_total: {num_total} classification_shape: {classification_shape} y_shape {y_shape}')
 
 
+class Metric(Pytree):
     def update(self, logits, y):
         raise NotImplementedError()
     def compute(self):
@@ -31,16 +19,30 @@ class Metric:
         raise NotImplementedError()
 
 class Accuracy(Metric):
+    r"""
+    The Accuracy metric is defined as follow.
+    
+    $$\mbox{NUM_CORRECT}/\mbox{NUM_TOTAL}
+
+    If using for binary classification with a single output, the target $y$ must be of 
+    shape $(\mbox{batch_size},1)$.
+    """
     def __init__(self):
-        super().__init__(accuracy, jax.Array(2))
+        self.reset()
 
     def update(self, logits, y):
-        classification = jnp.argmax(logits)
-        self.state[0] += jnp.sum(classification == y)
+        classification = jnp.where(logits>0.0, 1, 0)
+        self.num_correct += jnp.sum(classification == y)
+        self.num_total += logits.shape[0] 
+        jax.debug.callback(log_accuracy_update, self.num_correct, self.num_total, classification.shape, y.shape)
+        return self
 
     def compute(self):
-        raise NotImplementedError()
+        return self.num_correct/self.num_total
+        
     def reset(self):
-        raise NotImplementedError()
+        self.num_total = jnp.zeros((), dtype=jnp.float32)
+        self.num_correct = jnp.zeros((), dtype=jnp.int32)
+        return self
 
 

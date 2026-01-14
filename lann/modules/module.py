@@ -10,7 +10,11 @@ from jax.tree_util import register_pytree_node
 
 from ..pytree import Pytree
 
-
+# Pytree implementation inspired by equinox. I don't like the code generation. 
+# Replaced for now by Pytree baseclass
+#
+# TODO It seems like it should be possible to do without the code generation.
+#
 # _FLATTEN_NAME = 'flatten'
 # _UNFLATTEN_NAME = 'unflatten'
 # _SOURCE_FLATTEN = '''

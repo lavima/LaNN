@@ -3,18 +3,21 @@ import jax.random as jr
 import jax.numpy as jnp
 
 from typing import Callable
-from dataclasses import field
 from jax.typing import ArrayLike
 
+from ..pytree import static_field
 from ..activation import linear,relu
 from .module import Module
 
-class Linear(Module):
+class Dense(Module):
     # weights : jax.Array
     # bias : jax.Array
-    num_in : int = field(metadata=dict(static=True))
-    num_out : int = field(metadata=dict(static=True))
-    activation : Callable[[jax.Array], jax.Array] = field(metadata=dict(static=True))
+    # num_in : int = field(metadata=dict(static=True))
+    # num_out : int = field(metadata=dict(static=True))
+    # activation : Callable[[jax.Array], jax.Array] = field(metadata=dict(static=True))
+    num_in : int = static_field()
+    num_out : int = static_field()
+    activation : Callable[[jax.Array], jax.Array] = static_field()
 
     def __init__(self, num_in:int, num_out:int, activation:Callable[[jax.Array], jax.Array]=linear, random_key:ArrayLike=jr.key(0)):
         self.num_in = num_in

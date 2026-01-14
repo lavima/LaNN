@@ -1,11 +1,35 @@
 import typing as tp
 
 from types import MappingProxyType
-from dataclasses import Field
+from dataclasses import field, Field, MISSING
 from functools import partial
 from abc import ABCMeta
 from jax.tree_util import register_pytree_node
 
+def static_field(
+    *,
+    default: tp.Any = MISSING,
+    default_factory: tp.Any = MISSING,
+    init: bool = True,
+    repr: bool = True,
+    hash: tp.Optional[bool] = None,
+    compare: bool = True,
+    metadata: tp.Optional[tp.Mapping[str, tp.Any]] = None):
+
+    if metadata is None:
+        metadata = dict(static=True)
+    else:
+        metadata['static'] = True
+    
+    return field(
+        default=default,
+        default_factory=default_factory,
+        init=init,
+        repr=repr,
+        hash=hash,
+        compare=compare,
+        metadata=metadata)
+    
 class PytreeMeta(ABCMeta):
     def __call__(cls, *args, **kwargs):
         obj = object.__new__(cls, *args, **kwargs)
@@ -18,7 +42,6 @@ class PytreeMeta(ABCMeta):
         obj._pytree_fields = tuple(field for field in obj_vars if field not in obj._pytree_static_fields)
         
         return obj
-
 
 class Pytree(metaclass=PytreeMeta):
     _pytree_fields = tp.Tuple[str, ...]
