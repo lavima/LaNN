@@ -6,6 +6,7 @@ import jax.random as jr
 from jax import jit, value_and_grad
 from jax.lax import scan
 from jax.tree import flatten
+from jax.sharding import Mesh, PartitionSpec
 from optax import adam, apply_updates
 from optax.losses import sigmoid_binary_cross_entropy
 from sklearn.datasets import make_classification
@@ -14,6 +15,8 @@ from lann.metrics import Accuracy
 from lann.activation import linear, relu
 from lann.modules import Sequence
 from lann.modules.layers import Dense
+
+P = PartitionSpec
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -60,24 +63,31 @@ def epoch_callback(epoch, loss, score):
     logger.info(f'epoch {epoch}: loss: {loss:.4f} score: {score:.4f}')
 
 def train(model, loss, metric, optimizer, x, y, num_epochs=10, batch_size=10, random_key=jr.key(0)):
-    def _train_step(state, batch_indices):
+    def _train_step(state, batch):
         model, metric, optimizer_state = state
-        model, optimizer_state, loss_value, metric = train_step(model, loss, metric, optimizer_state, x[batch_indices], y[batch_indices])
+        model, optimizer_state, loss_value, metric = train_step(model, loss, metric, optimizer_state, batch, batch)
         return (model, metric, optimizer_state), loss_value
 
     @jit
-    def _epoch(model, metric, optimizer_state, random_key):
+    def _epoch(model, metric, optimizer_state, random_key, sharding):
         indices = jr.permutation(random_key, x_shape[0])
-        batched_indices = indices.reshape(-1, batch_size)
-        (model, metric, optimizer_state), accumulated_loss = scan(_train_step, (model, metric, optimizer_state), batched_indices)
+        shuffled_x = x[indices]
+
+        batched_x = shuffled_x.reshape(-1, batch_size, x.shape[-1])
+
+        sharded_x = jax.device_put(batched_x, sharding)
+
+        (model, metric, optimizer_state), accumulated_loss = scan(_train_step, (model, metric, optimizer_state), sharded_x)
 
         return model, optimizer_state, jnp.mean(accumulated_loss), metric
 
+    mesh = jax.make_mesh((2,), axis_names=('batches',))
+    sharding = PartitionSpec(mesh, P('batches', None, None))
     x_shape = x.shape
     optimizer_state = optimizer.init(model)
     for epoch in range(num_epochs):
         random_key, random_epoch = jr.split(random_key, 2)
-        model, optimizer_state, average_loss, metric = _epoch(model, metric, optimizer_state, random_epoch)
+        model, optimizer_state, average_loss, metric = _epoch(model, metric, optimizer_state, random_epoch, sharding)
         score = metric.compute()
         jax.debug.callback(epoch_callback, epoch, average_loss, score)
         metric = metric.reset()
