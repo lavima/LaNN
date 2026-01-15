@@ -6,7 +6,7 @@ import jax.random as jr
 from jax import jit, value_and_grad
 from jax.lax import scan
 from jax.tree import flatten
-from jax.sharding import Mesh, PartitionSpec
+from jax.sharding import Mesh, PartitionSpec, NamedSharding
 from optax import adam, apply_updates
 from optax.losses import sigmoid_binary_cross_entropy
 from sklearn.datasets import make_classification
@@ -65,7 +65,13 @@ def epoch_callback(epoch, loss, score):
 def train(model, loss, metric, optimizer, x, y, num_epochs=10, batch_size=10, random_key=jr.key(0)):
     def _train_step(state, batch_indices):
         model, metric, optimizer_state = state
-        model, optimizer_state, loss_value, metric = train_step(model, loss, metric, optimizer_state, x[batch_indices], y[batch_indices])
+        x_batch, y_batch = x[batch_indices], y[batch_indices]
+
+        x_sharded = jax.device_put(x_batch, sharding)
+        y_sharded = jax.device_put(y_batch, sharding)
+
+        model, optimizer_state, loss_value, metric = train_step(model, loss, metric, optimizer_state, x_sharded, y_sharded)
+
         return (model, metric, optimizer_state), loss_value
 
     @jit
@@ -77,6 +83,8 @@ def train(model, loss, metric, optimizer, x, y, num_epochs=10, batch_size=10, ra
 
         return model, optimizer_state, jnp.mean(accumulated_loss), metric
 
+    mesh = jax.make_mesh((2,), axis_names=('batches',))
+    sharding = NamedSharding(mesh, P('batches', None))
     x_shape = x.shape
     optimizer_state = optimizer.init(model)
     for epoch in range(num_epochs):
