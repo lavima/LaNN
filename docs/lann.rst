@@ -1,14 +1,6 @@
 lann package
 ============
 
-Subpackages
------------
-
-.. toctree::
-   :maxdepth: 4
-
-   lann.modules
-
 Submodules
 ----------
 
@@ -20,10 +12,34 @@ lann.activation module
    :show-inheritance:
    :undoc-members:
 
+lann.functions module
+------------------
+
+.. automodule:: lann.functions
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
 lann.metrics module
 -------------------
 
 .. automodule:: lann.metrics
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+lann.models module
+------------------
+
+.. automodule:: lann.models
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+lann.module module
+------------------
+
+.. automodule:: lann.module
    :members:
    :show-inheritance:
    :undoc-members:

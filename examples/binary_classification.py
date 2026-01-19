@@ -13,8 +13,8 @@ from sklearn.datasets import make_classification
 
 from lann.metrics import Accuracy
 from lann.activation import linear, relu
-from lann.modules import Sequence
-from lann.modules.layers import Dense
+from lann.models import Sequence
+from lann.module import Dense
 
 P = PartitionSpec
 

@@ -12,9 +12,8 @@ from optax.losses import sigmoid_binary_cross_entropy
 from tensorflow.keras.datasets.mnist import load_data
 
 from lann.metrics import Accuracy
-from lann.activation import linear, relu
-from lann.modules import Sequence
-from lann.modules.layers import Dense
+from lann.models import Sequence
+from lann.module import Dense, Conv, MaxPool, Flatten
 
 P = PartitionSpec
 
@@ -23,25 +22,29 @@ logger = logging.getLogger(__name__)
 
 random_key = jr.key(13)
 
-random_key, random_linear1, random_linear2, random_linear3, random_x, random_y = jr.split(random_key, 6)
+random_key, random_linear1, random_conv1, random_conv2, random_conv3 = jr.split(random_key, 5)
 
 (train_images, train_labels), (test_images, test_labels) = load_data()
 
 # Normalize images to a range of 0 to 1
 train_images = train_images / 255.0
 test_images = test_images / 255.0
+train_images = train_images.reshape(train_images.shape + (1,))
+test_images = test_images.reshape(test_images.shape + (1,))
+train_labels = train_labels.reshape(-1, 1)
+test_labels = test_labels.reshape(-1, 1)
+print(test_labels.shape)
+
 
 model = Sequence([
-    Dense(20, 10, activation=relu, random_key=random_linear1),
-    Dense(10, 5, activation=relu, random_key=random_linear2),
-    Dense(5, 1, activation=linear, random_key=random_linear3)])
-
-# children, treedef = flatten(model)
-# print(children)
-# print(treedef)
-
-# for module in iter_modules(model):
-#     print(module)
+    Conv(num_channels_in=1, num_channels_out=5, window_size=(3, 3), random_key=random_conv1),
+    MaxPool(),
+    Conv(num_channels_in=5, num_channels_out=5, window_size=(3, 3), strides=(1, 1), random_key=random_conv2),
+    MaxPool(),
+    Conv(num_channels_in=5, num_channels_out=5, window_size=(3, 3), strides=(1, 1), random_key=random_conv3),
+    MaxPool(),
+    Flatten(),
+    Dense(num_in=49, num_out=10, random_key=random_linear1)])
 
 optimizer = adam(1e-3)
 
@@ -78,7 +81,11 @@ def train(model, loss, metric, optimizer, x, y, num_epochs=10, batch_size=10, ra
 
         return model, optimizer_state, jnp.mean(accumulated_loss), metric
 
+    x = jnp.array(x)
+    y = jnp.array(y)
+
     x_shape = x.shape
+
     optimizer_state = optimizer.init(model)
     for epoch in range(num_epochs):
         random_key, random_epoch = jr.split(random_key, 2)
@@ -87,4 +94,4 @@ def train(model, loss, metric, optimizer, x, y, num_epochs=10, batch_size=10, ra
         jax.debug.callback(epoch_callback, epoch, average_loss, score)
         metric = metric.reset()
 
-train(model, sigmoid_binary_cross_entropy, Accuracy(), optimizer, x, y, num_epochs=200, batch_size=200)
+train(model, sigmoid_binary_cross_entropy, Accuracy(), optimizer, train_images, train_labels, num_epochs=200, batch_size=20)
