@@ -1,17 +1,15 @@
 import logging
 import jax
-import grain
-import numpy as np
 import jax.numpy as jnp
 import jax.random as jr
 
 from jax import jit, value_and_grad
 from jax.lax import scan
 from jax.tree import flatten
-from jax.sharding import Mesh, PartitionSpec, NamedSharding
+from jax.sharding import Mesh, PartitionSpec
 from optax import adam, apply_updates
 from optax.losses import sigmoid_binary_cross_entropy
-from sklearn.datasets import make_classification
+from tensorflow.keras.datasets.mnist import load_data
 
 from lann.metrics import Accuracy
 from lann.activation import linear, relu
@@ -27,22 +25,11 @@ random_key = jr.key(13)
 
 random_key, random_linear1, random_linear2, random_linear3, random_x, random_y = jr.split(random_key, 6)
 
-x, y = make_classification(n_samples=10000, n_features=20, n_informative=5)
-y = (y > 0).astype(np.float32)
-x = np.array(x)
-y = np.array(y).reshape(y.shape[0], 1)
+(train_images, train_labels), (test_images, test_labels) = load_data()
 
-class DataSource(grain.sources.RandomAccessDataSource):
-    def __init__(self, x: np.ndarray, y: np.ndarray):
-        self.x = x
-        self.y = y
-
-    def __len__(self):
-        return len(self.x)
-
-    def __getitem__(self, idx):
-        return {"features": self.x[idx], "label": self.y[idx]}
-
+# Normalize images to a range of 0 to 1
+train_images = train_images / 255.0
+test_images = test_images / 255.0
 
 model = Sequence([
     Dense(20, 10, activation=relu, random_key=random_linear1),
@@ -76,37 +63,22 @@ def train_step(model, loss, metric, optimizer_state, x, y):
 def epoch_callback(epoch, loss, score):
     logger.info(f'epoch {epoch}: loss: {loss:.4f} score: {score:.4f}')
 
-def train(model, loss, metric, optimizer, x, y, num_epochs=10, scan_batch_size=10, batch_size=10, random_key=jr.key(0)):
-    def _train_step(state, batch):
+def train(model, loss, metric, optimizer, x, y, num_epochs=10, batch_size=10, random_key=jr.key(0)):
+    def _train_step(state, batch_indices):
         model, metric, optimizer_state = state
-
-        x_sharded = jax.device_put(batch['features'], sharding)
-        y_sharded = jax.device_put(batch['label'], sharding)
-
-        model, optimizer_state, loss_value, metric = train_step(model, loss, metric, optimizer_state, x_sharded, y_sharded)
-
+        model, optimizer_state, loss_value, metric = train_step(model, loss, metric, optimizer_state, x[batch_indices], y[batch_indices])
         return (model, metric, optimizer_state), loss_value
 
     @jit
-    def _scan_step(model, metric, optimizer_state, random_key, scan_batch):
-        scan_batch = jax.tree.map(lambda x: x.reshape(scan_batch_size, batch_size, -1), scan_batch)
-        (model, metric, optimizer_state), accumulated_loss = scan(_train_step, (model, metric, optimizer_state), scan_batch)
-        return model, optimizer_state, jnp.mean(accumulated_loss), metric
-
     def _epoch(model, metric, optimizer_state, random_key):
-        batches = dataset.shuffle(seed=13).batch(scan_batch_size*batch_size).to_iter_dataset()
-        accumulated_loss = 0
-        for scan_batch in batches:
-            model, optmizer_state, average_loss, metric = _scan_step(model, metric, optimizer_state, random_key, scan_batch)
-            accumulated_loss += average_loss
+        indices = jr.permutation(random_key, x_shape[0])
+        batched_indices = indices.reshape(-1, batch_size)
+
+        (model, metric, optimizer_state), accumulated_loss = scan(_train_step, (model, metric, optimizer_state), batched_indices)
+
         return model, optimizer_state, jnp.mean(accumulated_loss), metric
 
-
-    dataset = grain.MapDataset.source(DataSource(x, y))
-
-    mesh = jax.make_mesh((2,), axis_names=('batch',))
-    sharding = NamedSharding(mesh, P('batch', None))
-
+    x_shape = x.shape
     optimizer_state = optimizer.init(model)
     for epoch in range(num_epochs):
         random_key, random_epoch = jr.split(random_key, 2)
