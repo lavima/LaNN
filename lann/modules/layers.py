@@ -11,7 +11,7 @@ from ..activation import linear,relu
 from .module import Module
 
 class Dense(Module):
-    """Dense is a linear combination with bias module, with an optional activation function
+    """Dense is a fully connected linear combination with bias module, with an optional activation function
 
     Attributes:
         num_in: 
@@ -48,7 +48,9 @@ class Dense(Module):
 class Conv(Module):
     """Conv is a convolution module. The dimension numbers used are
     ('NHWC', 'IOHW, 'NHWC') (see Jax.lax.conv_general_dilated documentation
-    for more details.)
+    for more details). 
+
+    Would it be better to just specify the kernel size directly?
 
     Attributes:
         num_channels_in: 
