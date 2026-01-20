@@ -1,3 +1,4 @@
+import logging
 import jax
 import jax.random as jr
 import jax.numpy as jnp
@@ -8,8 +9,9 @@ from jax.lax import conv_general_dilated
 
 from .activation import linear
 from .pytree import Pytree, static_field
-from .functions import max_pool
+from .functions import max_pool, flatten
 
+logger = logging.getLogger(__name__)
 
 class Module(Pytree):
 
@@ -75,6 +77,9 @@ class Dense(Module):
     def __call__(self, x):
         return self.activation(jnp.dot(x, self.weights) + self.bias)
 
+def log_conv_shape(input_shape, kernel_shape, output_shape):
+    logger.debug(f'input_shape: {input_shape} kernel_shape: {kernel_shape} output_shape: {output_shape}')
+
 class Conv(Module):
     """Conv is a convolution module. The dimension numbers used are
     ('NHWC', 'IOHW, 'NHWC') (see Jax.lax.conv_general_dilated documentation
@@ -115,7 +120,9 @@ class Conv(Module):
         self.kernel = jr.uniform(random_kernel, (num_channels_in, num_channels_out) + tuple(window_size))
 
     def __call__(self, inputs):
-        return conv_general_dilated(inputs, self.kernel, self.strides, self.padding, dimension_numbers=('NHWC', 'IOHW', 'NHWC'))
+        outputs = conv_general_dilated(inputs, self.kernel, self.strides, self.padding, dimension_numbers=('NHWC', 'IOHW', 'NHWC'))
+        jax.debug.callback(log_conv_shape, inputs.shape, self.kernel.shape, outputs.shape)
+        return outputs
 
 class MaxPool(Module):
     """MaxPool provides a module wrapper for lann.functions.max_pool
@@ -142,7 +149,7 @@ class MaxPool(Module):
 
 class Flatten(Module):
     def __call__(self, inputs):
-        return inputs.flatten()
+        return flatten(inputs)
 
 # Pytree implementation inspired by equinox. I don't like the code generation. 
 # Replaced for now by Pytree baseclass

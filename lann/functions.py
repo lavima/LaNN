@@ -28,5 +28,5 @@ def max_pool(
         padding=padding)
 
 def flatten(inputs):
-    return inputs.flatten()
+    return inputs.reshape(inputs.shape[0], -1)
 

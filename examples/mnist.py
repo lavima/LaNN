@@ -1,5 +1,7 @@
+import os
 import logging
 import jax
+jax.config.update('jax_platform_name', 'cpu')
 import jax.numpy as jnp
 import jax.random as jr
 
@@ -14,6 +16,9 @@ from tensorflow.keras.datasets.mnist import load_data
 from lann.metrics import Accuracy
 from lann.models import Sequence
 from lann.module import Dense, Conv, MaxPool, Flatten
+
+# os.environ["JAX_PLATFORM_NAME"] = "cpu" 
+# os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 P = PartitionSpec
 
@@ -33,15 +38,14 @@ train_images = train_images.reshape(train_images.shape + (1,))
 test_images = test_images.reshape(test_images.shape + (1,))
 train_labels = train_labels.reshape(-1, 1)
 test_labels = test_labels.reshape(-1, 1)
+print(test_images.shape)
 print(test_labels.shape)
 
 
 model = Sequence([
-    Conv(num_channels_in=1, num_channels_out=5, window_size=(3, 3), random_key=random_conv1),
+    Conv(num_channels_in=1, num_channels_out=1, window_size=(3, 3), random_key=random_conv1),
     MaxPool(),
-    Conv(num_channels_in=5, num_channels_out=5, window_size=(3, 3), strides=(1, 1), random_key=random_conv2),
-    MaxPool(),
-    Conv(num_channels_in=5, num_channels_out=5, window_size=(3, 3), strides=(1, 1), random_key=random_conv3),
+    Conv(num_channels_in=1, num_channels_out=1, window_size=(3, 3), strides=(1, 1), random_key=random_conv2),
     MaxPool(),
     Flatten(),
     Dense(num_in=49, num_out=10, random_key=random_linear1)])
