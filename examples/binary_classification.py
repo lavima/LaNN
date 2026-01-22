@@ -31,9 +31,9 @@ x = jnp.array(x)
 y = jnp.array(y).reshape(y.shape[0], 1)
 
 model = Sequence([
-    Dense(20, 10, activation=relu, random_key=random_linear1),
-    Dense(10, 5, activation=relu, random_key=random_linear2),
-    Dense(5, 1, activation=linear, random_key=random_linear3)])
+    Dense(num_in=20, num_out=10, activation=relu, random_key=random_linear1),
+    Dense(num_in=10, num_out=5, activation=relu, random_key=random_linear2),
+    Dense(num_in=5, num_out=1, activation=linear, random_key=random_linear3)])
 
 # children, treedef = flatten(model)
 # print(children)

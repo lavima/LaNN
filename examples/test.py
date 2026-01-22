@@ -1,3 +1,4 @@
+import jax
 import jax.numpy as jnp
 import jax.random as jr
 
@@ -13,3 +14,6 @@ print(w)
 y = jnp.dot(x, w)
 
 print(y)
+
+# print(jax.lib.xla_bridge.get_backend().platform)
+print(jax.devices())

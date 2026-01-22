@@ -1,7 +1,6 @@
 import os
 import logging
 import jax
-jax.config.update('jax_platform_name', 'cpu')
 import jax.numpy as jnp
 import jax.random as jr
 
@@ -10,15 +9,13 @@ from jax.lax import scan
 from jax.tree import flatten
 from jax.sharding import Mesh, PartitionSpec
 from optax import adam, apply_updates
-from optax.losses import sigmoid_binary_cross_entropy
-from tensorflow.keras.datasets.mnist import load_data
+from optax.losses import softmax_cross_entropy_with_integer_labels
 
+from lann.datasets import load_mnist
 from lann.metrics import Accuracy
 from lann.models import Sequence
 from lann.module import Dense, Conv, MaxPool, Flatten
-
-# os.environ["JAX_PLATFORM_NAME"] = "cpu" 
-# os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+from lann.activation import relu
 
 P = PartitionSpec
 
@@ -27,28 +24,24 @@ logger = logging.getLogger(__name__)
 
 random_key = jr.key(13)
 
-random_key, random_linear1, random_conv1, random_conv2, random_conv3 = jr.split(random_key, 5)
+random_key, random_linear1, random_linear2, random_conv1, random_conv2 = jr.split(random_key, 5)
 
-(train_images, train_labels), (test_images, test_labels) = load_data()
+(train_images, train_labels), (test_images, test_labels) = load_mnist()
+# train_labels = train_labels.astype(jnp.int32)
+# test_labels = test_labels.astype(jnp.int32)
 
-# Normalize images to a range of 0 to 1
-train_images = train_images / 255.0
-test_images = test_images / 255.0
-train_images = train_images.reshape(train_images.shape + (1,))
-test_images = test_images.reshape(test_images.shape + (1,))
-train_labels = train_labels.reshape(-1, 1)
-test_labels = test_labels.reshape(-1, 1)
 print(test_images.shape)
 print(test_labels.shape)
 
 
 model = Sequence([
-    Conv(num_channels_in=1, num_channels_out=1, window_size=(3, 3), random_key=random_conv1),
+    Conv(num_channels_in=1, num_channels_out=4, window_size=(3, 3), random_key=random_conv1),
     MaxPool(),
-    Conv(num_channels_in=1, num_channels_out=1, window_size=(3, 3), strides=(1, 1), random_key=random_conv2),
+    Conv(num_channels_in=4, num_channels_out=4, window_size=(3, 3), strides=(1, 1), random_key=random_conv2),
     MaxPool(),
     Flatten(),
-    Dense(num_in=49, num_out=10, random_key=random_linear1)])
+    Dense(num_in=196, num_out=98, activation=relu, random_key=random_linear1),
+    Dense(num_in=98, num_out=10, random_key=random_linear2)])
 
 optimizer = adam(1e-3)
 
@@ -98,4 +91,5 @@ def train(model, loss, metric, optimizer, x, y, num_epochs=10, batch_size=10, ra
         jax.debug.callback(epoch_callback, epoch, average_loss, score)
         metric = metric.reset()
 
-train(model, sigmoid_binary_cross_entropy, Accuracy(), optimizer, train_images, train_labels, num_epochs=200, batch_size=20)
+# with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
+train(model, softmax_cross_entropy_with_integer_labels, Accuracy(), optimizer, train_images, train_labels, num_epochs=400, batch_size=1000)
