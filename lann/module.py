@@ -82,8 +82,10 @@ def log_conv_shape(input_shape, kernel_shape, output_shape):
 
 class Conv(Module):
     """Conv is a convolution module. The dimension numbers used are
-    ('NHWC', 'IOHW, 'NHWC') (see Jax.lax.conv_general_dilated documentation
-    for more details). 
+    ('NHWC', 'HWIO, 'NHWC') (see Jax.lax.conv_general_dilated documentation
+    for more details). This ordering has been chosen partly because it is 
+    intuitive (NHWC) and partly because it makes the implementation of the 
+    initializers easy (HWIO).
 
     Would it be better to just specify the kernel size directly?
 
@@ -117,10 +119,10 @@ class Conv(Module):
         self.padding = padding
 
         random_kernel = random_key
-        self.kernel = jr.uniform(random_kernel, (num_channels_in, num_channels_out) + tuple(window_size))
+        self.kernel = jr.uniform(random_kernel, tuple(window_size) + (num_channels_in, num_channels_out))
 
     def __call__(self, inputs):
-        outputs = conv_general_dilated(inputs, self.kernel, self.strides, self.padding, dimension_numbers=('NHWC', 'IOHW', 'NHWC'))
+        outputs = conv_general_dilated(inputs, self.kernel, self.strides, self.padding, dimension_numbers=('NHWC', 'HWIO', 'NHWC'))
         jax.debug.callback(log_conv_shape, inputs.shape, self.kernel.shape, outputs.shape)
         return outputs
 

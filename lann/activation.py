@@ -1,9 +1,16 @@
+import logging
 import jax
 import jax.numpy as jnp
 
+logger = logging.getLogger(__name__)
+
+def log_sigmoid(x):
+    logger.debug(f'sigmoid x.shape: {x.shape}')
+
 def sigmoid(x):
     # 1/(1+e^x)
-    jax.lax.logistic(x)
+    jax.debug.callback(log_sigmoid, x)
+    return jax.lax.logistic(x)
 
 def softmax(x):
     # ensures numerical stability by making the values range (-inf, 0]
