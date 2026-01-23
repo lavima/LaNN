@@ -83,9 +83,10 @@ def log_conv_shape(input_shape, kernel_shape, output_shape):
 class Conv(Module):
     """Conv is a convolution module. The dimension numbers used are
     ('NHWC', 'HWIO, 'NHWC') (see Jax.lax.conv_general_dilated documentation
-    for more details). This ordering has been chosen partly because it is 
-    intuitive (NHWC) and partly because it makes the implementation of the 
-    initializers easy (HWIO).
+    for details on meaning of each character). This ordering has been chosen
+    partly because it is intuitive (NHWC) and partly because it makes the 
+    implementation of the initializers easy (HWIO). I think it also matches 
+    most popular JAX libraries.
 
     Would it be better to just specify the kernel size directly?
 

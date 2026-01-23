@@ -43,6 +43,13 @@ def scaled_variance(
         else
             num_batch = reduce(mul, [shape[x] for x in batch_axis])
 
+        remaining = reduce(mul, shape)/num_in/num_out/num_batch
+        
+        fan_in = num_in * remaining
+        fan_out = num_out * remaining
+        
+        return fan_in, fan_out
+
     def init(random_key, shape, dtype):
 
 
