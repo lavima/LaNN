@@ -1,4 +1,4 @@
-from typing import Any, Union
+from typing import Any, Union, Sequence
 
 # TODO Are these available in JAX?
 DimSize = Union[int, Any]  

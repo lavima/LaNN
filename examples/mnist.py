@@ -12,7 +12,7 @@ from optax import adam, apply_updates
 from optax.losses import softmax_cross_entropy_with_integer_labels
 
 from lann.datasets import load_mnist
-from lann.metrics import Accuracy
+from lann.metrics import PrecisionRecallFMeasure, Accuracy, Metrics
 from lann.models import Sequence
 from lann.module import Dense, Conv, MaxPool, Flatten
 from lann.activation import relu, sigmoid
@@ -37,7 +37,7 @@ print(test_labels.shape)
 model = Sequence([
     Conv(num_channels_in=1, num_channels_out=8, window_size=(3, 3), random_key=random_conv1),
     MaxPool(),
-    Conv(num_channels_in=8, num_channels_out=8, window_size=(3, 3), strides=(1, 1), random_key=random_conv2),
+    Conv(num_channels_in=8, num_channels_out=8, window_size=(3, 3), random_key=random_conv2),
     MaxPool(),
     Flatten(),
     Dense(num_in=392, num_out=196, activation=relu, random_key=random_linear1),
@@ -53,13 +53,18 @@ model = Sequence([
 #     Dense(num_in=196, num_out=98, activation=sigmoid, random_key=random_linear2),
 #     Dense(num_in=98, num_out=10, random_key=random_linear3)])
 
+# params, treedef = flatten(model)
+# print(treedef)
+# print(params)
+
 optimizer = adam(1e-3)
 
 def log_batch_loss_and_eval(x, y, logits):
     logger.debug(f'x.shape: {x.shape} y.shape: {y.shape} logits.shape: {logits.shape}')
 
-def log_epoch(epoch, loss, score):
-    logger.info(f'epoch {epoch}: loss: {loss:.4f} score: {score:.4f}')
+def log_epoch(epoch, loss, scores):
+    score_strings = [f'{name}: {value:.4f}' for name, value in scores.items()]
+    logger.info(f'epoch {epoch}: loss: {loss:.4f} '+', '.join(score_strings))
 
 def batch_loss_and_eval(model, loss, metric, x, y):
     logits = model(x)
@@ -101,9 +106,10 @@ def train(model, loss, metric, optimizer, x, y, num_epochs=10, batch_size=10, ra
     for epoch in range(num_epochs):
         random_key, random_epoch = jr.split(random_key, 2)
         model, optimizer_state, average_loss, metric = _epoch(model, metric, optimizer_state, random_epoch)
-        score = metric.compute()
-        jax.debug.callback(log_epoch, epoch, average_loss, score)
+        scores = metric.compute()
+        jax.debug.callback(log_epoch, epoch, average_loss, scores)
         metric = metric.reset()
 
-# with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
-train(model, softmax_cross_entropy_with_integer_labels, Accuracy(), optimizer, train_images, train_labels, num_epochs=400, batch_size=1000)
+metric = Metrics([Accuracy(), PrecisionRecallFMeasure(num_classes=10, average='macro')])
+
+train(model, softmax_cross_entropy_with_integer_labels, metric, optimizer, train_images, train_labels, num_epochs=100, batch_size=1000)

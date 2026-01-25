@@ -3,13 +3,15 @@ import jax
 import jax.random as jr
 import jax.numpy as jnp
 
-from typing import Callable, Sequence, Union, Tuple
+from typing import Any, Callable, Sequence, Union, Tuple
 from jax.typing import ArrayLike
 from jax.lax import conv_general_dilated
 
+from .typing import Shape
 from .activation import linear
 from .pytree import Pytree, static_field
 from .functions import max_pool, flatten
+from .initializers import Initializer, zeros, glorot_normal, he_normal
 
 logger = logging.getLogger(__name__)
 
@@ -54,9 +56,19 @@ class Dense(Module):
     """
     num_in : int = static_field()
     num_out : int = static_field()
+    init_weights : Callable[[jax.Array, Shape, Any|None], jax.Array] = static_field()
+    init_bias : Callable[[jax.Array, Shape, Any|None], jax.Array] = static_field()
     activation : Callable[[jax.Array], jax.Array] = static_field()
 
-    def __init__(self, *, num_in:int, num_out:int, activation:Callable[[jax.Array], jax.Array]=linear, random_key:ArrayLike=jr.key(0)):
+    def __init__(
+            self, 
+            *, 
+            num_in:int, 
+            num_out:int, 
+            init_weights:Initializer=glorot_normal(), 
+            init_bias:Initializer=zeros, 
+            activation:Callable[[jax.Array], jax.Array]=linear, 
+            random_key:ArrayLike=jr.key(0)):
         """Construct a new Dense module
 
         Args:
@@ -67,12 +79,14 @@ class Dense(Module):
         """
         self.num_in = num_in
         self.num_out = num_out
+        self.init_weights = init_weights
+        self.init_bias = init_bias
         self.activation = activation
 
         key_weights, key_bias = jr.split(random_key)
 
-        self.weights = jr.uniform(key_weights, (num_in, num_out))
-        self.bias = jr.uniform(key_bias, (num_out,))
+        self.weights = init_weights(key_weights, (num_in, num_out))
+        self.bias = init_bias(key_bias, (num_out,))
 
     def __call__(self, x):
         return self.activation(jnp.dot(x, self.weights) + self.bias)
@@ -88,7 +102,7 @@ class Conv(Module):
     implementation of the initializers easy (HWIO). I think it also matches 
     most popular JAX libraries.
 
-    Would it be better to just specify the kernel size directly?
+    Would it be better to just speci    fy the kernel size directly?
 
     Attributes:
         num_channels_in: 
@@ -103,6 +117,7 @@ class Conv(Module):
     window_size : Sequence[int] = static_field()
     strides : Sequence[int] = static_field()
     padding : Union[str, Sequence[Tuple[int, int]]] = static_field()
+    init_kernel : Initializer = static_field()
 
     def __init__(
             self, 
@@ -112,15 +127,18 @@ class Conv(Module):
             window_size:Sequence[int]=(3, 3), 
             strides:Sequence[int]=(1, 1), 
             padding:Union[str, Sequence[Tuple[int, int]]]='SAME', 
+            init_kernel:Initializer=he_normal(), 
             random_key:ArrayLike=jr.key(0)):
         self.num_channels_in = num_channels_in
         self.num_channels_out = num_channels_out
         self.window_size = window_size
         self.strides = strides
         self.padding = padding
+        self.init_kernel = init_kernel
 
         random_kernel = random_key
-        self.kernel = jr.uniform(random_kernel, tuple(window_size) + (num_channels_in, num_channels_out))
+        self.kernel = init_kernel(random_kernel, tuple(window_size) + (num_channels_in, num_channels_out))
+        # self.kernel = jr.normal(random_kernel, tuple(window_size) + (num_channels_in, num_channels_out))
 
     def __call__(self, inputs):
         outputs = conv_general_dilated(inputs, self.kernel, self.strides, self.padding, dimension_numbers=('NHWC', 'HWIO', 'NHWC'))

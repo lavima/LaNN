@@ -20,6 +20,14 @@ lann.functions module
    :show-inheritance:
    :undoc-members:
 
+lann.initializers module
+------------------
+
+.. automodule:: lann.initializers
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
 lann.metrics module
 -------------------
 
