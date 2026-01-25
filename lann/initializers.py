@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class Initializer(Protocol):
     """
     Initializer protocol. Inspired by jax.nn.Initializer. Rewritten from 
-    scratch to learn the python mechanics.
+    scratch to learn the python mechanics and the different initialization methods.
     """
     def __call__(self, random_key: jax.Array, shape: Shape, dtype: Any|None=None):
         raise NotImplementedError()
@@ -111,27 +111,27 @@ def scaled_variance(
     return init
 
 def glorot_normal(
-        in_axis: Sequence[int]=-2, 
-        out_axis: Sequence[int]=-1, 
-        batch_axis: Sequence[int] = (),
+        in_axis: Sequence[int]|int = -2, 
+        out_axis: Sequence[int]|int = -1, 
+        batch_axis: Sequence[int]|int = (),
         truncate: bool = False):
     return scaled_variance(type='glorot', distribution='normal' if not truncate else 'trancated_normal', in_axis=in_axis, out_axis=out_axis, batch_axis=batch_axis)
 
 def glorot_uniform(
-        in_axis: Sequence[int]=-2, 
-        out_axis: Sequence[int]=-1, 
-        batch_axis: Sequence[int] = ()):
+        in_axis: Sequence[int]|int = -2, 
+        out_axis: Sequence[int]|int = -1, 
+        batch_axis: Sequence[int]|int = ()):
     return scaled_variance(type='glorot', distribution='uniform', in_axis=in_axis, out_axis=out_axis, batch_axis=batch_axis)
 
 def he_normal(
-        in_axis: Sequence[int]=-2, 
-        out_axis: Sequence[int]=-1, 
-        batch_axis: Sequence[int] = (),
+        in_axis: Sequence[int]|int = -2, 
+        out_axis: Sequence[int]|int = -1, 
+        batch_axis: Sequence[int]|int = (),
         truncate: bool = False):
     return scaled_variance(type='he', distribution='normal' if not truncate else 'truncated_normal', in_axis=in_axis, out_axis=out_axis, batch_axis=batch_axis)
 
 def he_uniform(
-        in_axis: Sequence[int]=-2, 
-        out_axis: Sequence[int]=-1, 
-        batch_axis: Sequence[int] = ()):
+        in_axis: Sequence[int]|int = -2, 
+        out_axis: Sequence[int]|int = -1, 
+        batch_axis: Sequence[int]|int = ()):
     return scaled_variance(type='he', distribution='uniform', in_axis=in_axis, out_axis=out_axis, batch_axis=batch_axis)

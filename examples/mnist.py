@@ -14,7 +14,7 @@ from optax.losses import softmax_cross_entropy_with_integer_labels
 from lann.datasets import load_mnist
 from lann.metrics import PrecisionRecallFMeasure, Accuracy, Metrics
 from lann.models import Sequence
-from lann.module import Dense, Conv, MaxPool, Flatten
+from lann.modules import Linear, Dense, Conv, MaxPool, Flatten
 from lann.activation import relu, sigmoid
 
 P = PartitionSpec
@@ -42,20 +42,11 @@ model = Sequence([
     Flatten(),
     Dense(num_in=392, num_out=196, activation=relu, random_key=random_linear1),
     Dense(num_in=196, num_out=98, activation=relu, random_key=random_linear2),
-    Dense(num_in=98, num_out=10, random_key=random_linear3)])
+    Linear(num_in=98, num_out=10, random_key=random_linear3)])
 
-# model = Sequence([
-#     Conv(num_channels_in=1, num_channels_out=4, window_size=(3, 3), random_key=random_conv1),
-#     MaxPool(),
-#     Conv(num_channels_in=4, num_channels_out=4, window_size=(3, 3), strides=(1, 1), random_key=random_conv2),
-#     MaxPool(),
-#     Flatten(),
-#     Dense(num_in=196, num_out=98, activation=sigmoid, random_key=random_linear2),
-#     Dense(num_in=98, num_out=10, random_key=random_linear3)])
-
-# params, treedef = flatten(model)
-# print(treedef)
-# print(params)
+params, treedef = flatten(model)
+print(treedef)
+print(params)
 
 optimizer = adam(1e-3)
 

@@ -15,6 +15,7 @@ def static_field(
     hash: tp.Optional[bool] = None,
     compare: bool = True,
     metadata: tp.Optional[tp.Mapping[str, tp.Any]] = None):
+    """A wrapper around dataclasses.field that sets metadata['static'] to True"""
 
     if metadata is None:
         metadata = dict(static=True)
@@ -31,7 +32,16 @@ def static_field(
         metadata=metadata)
     
 class PytreeMeta(ABCMeta):
+    """
+    PytreeMeta is the metaclass for the Pytree base class. Inspired simple_pytree, but 
+    simpler. 
+    """
     def __call__(cls, *args, **kwargs):
+        """
+        Called when Pytree() or a subclass is invoked. Makes sure that __init__ is 
+        invoked, assuming any Pytree children attributes are created here. All instance
+        variables not registered as static will be registered a pytree field
+        """
         obj = object.__new__(cls, *args, **kwargs)
         try:
             obj.__init__(*args, **kwargs)
@@ -44,6 +54,9 @@ class PytreeMeta(ABCMeta):
         return obj
 
 class Pytree(metaclass=PytreeMeta):
+    """
+    Base class for all Pytree objects. Inspired by simple_pytree, but simpler. 
+    """
     _pytree_fields = tp.Tuple[str, ...]
     _pytree_static_fields = tp.Tuple[str, ...]
     def __init_subclass__(cls, **kwargs):
@@ -53,6 +66,11 @@ class Pytree(metaclass=PytreeMeta):
         for field, value in class_vars.items():
             if isinstance(value, Field) and value.metadata.get("static", False):
                 static_fields.add(field)
+        for parent_class in cls.mro():
+            if parent_class is cls or parent_class is Pytree:
+                continue
+            if issubclass(parent_class, Pytree):
+                static_fields.update(parent_class._pytree_static_fields)
         static_fields.add('_pytree_fields')
         static_fields = tuple(static_fields)
         cls._pytree_static_fields = static_fields
