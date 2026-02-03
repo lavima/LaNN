@@ -16,6 +16,9 @@ def softmax(x):
     # ensures numerical stability by making the values range (-inf, 0]
     x = x - jnp.max(x, axis=-1, keepdims=True)
     return jnp.exp(x) / jnp.sum(jnp.exp(x), axis=-1, keepdims=True)
+
+def tanh(x):
+    return jax.lax.tanh(x)
     
 def relu(x):
     return jnp.maximum(x, 0)

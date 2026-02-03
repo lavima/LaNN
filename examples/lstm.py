@@ -9,10 +9,9 @@ from jax.tree import flatten
 from optax import adam, apply_updates
 from optax.losses import softmax_cross_entropy_with_integer_labels
 
-from lann.datasets import load_mnist
 from lann.metrics import PrecisionRecallFMeasure, Accuracy, Metrics
 from lann.models import Sequence
-from lann.modules import Linear, Dense, Conv, MaxPool, Flatten
+from lann.modules import LSTMCell, RNN
 from lann.activation import relu, sigmoid
 
 
@@ -23,23 +22,15 @@ random_key = jr.key(13)
 
 random_key, random_linear1, random_linear2, random_linear3, random_conv1, random_conv2 = jr.split(random_key, 6)
 
-(train_images, train_labels), (test_images, test_labels) = load_mnist()
-# train_labels = train_labels.astype(jnp.int32)
-# test_labels = test_labels.astype(jnp.int32)
+random_key, random_x, random_y = jr.split(random_key, 3)
 
-print(test_images.shape)
-print(test_labels.shape)
-
+x = jr.normal(random_x, (1000, 100, 10))
+y = jr.normal(random_y, (1000,))
 
 model = Sequence([
-    Conv(num_channels_in=1, num_channels_out=8, window_size=(3, 3), random_key=random_conv1),
-    MaxPool(),
-    Conv(num_channels_in=8, num_channels_out=8, window_size=(3, 3), random_key=random_conv2),
-    MaxPool(),
-    Flatten(),
-    Dense(num_in=392, num_out=196, activation=relu, random_key=random_linear1),
-    Dense(num_in=196, num_out=98, activation=relu, random_key=random_linear2),
-    Linear(num_in=98, num_out=10, random_key=random_linear3)])
+    RNN(LSTMCell(num_features_in=10, num_features_hidden=10)),
+    RNN(LSTMCell(num_features_in=10, num_features_hidden=10))
+    ])
 
 params, treedef = flatten(model)
 print(treedef)
@@ -102,4 +93,4 @@ def train(model, loss, metric, optimizer, x, y, num_epochs=10, batch_size=10, ra
 
 metric = Metrics([Accuracy(), PrecisionRecallFMeasure(num_classes=10, average='macro')])
 
-train(model, softmax_cross_entropy_with_integer_labels, metric, optimizer, train_images, train_labels, num_epochs=100, batch_size=1000)
+train(model, softmax_cross_entropy_with_integer_labels, metric, optimizer, x, y, num_epochs=100, batch_size=100)

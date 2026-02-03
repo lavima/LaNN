@@ -9,7 +9,7 @@ from jax.typing import ArrayLike
 from jax.lax import conv_general_dilated
 
 from .typing import Shape
-from .activation import linear
+from .activation import linear, sigmoid, tanh
 from .pytree import Pytree, static_field
 from .functions import max_pool, flatten
 from .initializers import Initializer, zeros, glorot_normal, he_normal
@@ -57,6 +57,7 @@ class Linear(Module):
     num_in : int = static_field()
     num_out : int = static_field()
     init_weights : Callable[[jax.Array, Shape, Any|None], jax.Array] = static_field()
+    use_bias : bool = static_field()
     init_bias : Callable[[jax.Array, Shape, Any|None], jax.Array] = static_field()
 
     def __init__(
@@ -65,9 +66,10 @@ class Linear(Module):
             num_in:int, 
             num_out:int, 
             init_weights:Initializer=glorot_normal(), 
-            init_bias:Initializer=zeros, 
+            use_bias:bool=True,
+            init_bias:Initializer|None=zeros, 
             random_key:ArrayLike=jr.key(0)):
-        """Construct a new Dense module
+        """Construct a new Linear module
 
         Args:
             num_in: 
@@ -77,15 +79,22 @@ class Linear(Module):
         self.num_in = num_in
         self.num_out = num_out
         self.init_weights = init_weights
+        self.use_bias = use_bias
         self.init_bias = init_bias
 
         key_weights, key_bias = jr.split(random_key)
 
         self.weights = init_weights(key_weights, (num_in, num_out))
-        self.bias = init_bias(key_bias, (num_out,))
+        if use_bias:
+            if not init_bias:
+                raise ValueError('The bias initializer must be set when use_bias=True')
+            self.bias = init_bias(key_bias, (num_out,))
 
     def __call__(self, x):
-        return jnp.dot(x, self.weights) + self.bias
+        if self.use_bias:
+            return jnp.dot(x, self.weights) + self.bias
+        else:
+            return jnp.dot(x, self.weights) 
 
 class Dense(Linear):
     activation : Callable[[jax.Array], jax.Array] = static_field()
@@ -133,7 +142,7 @@ class Conv(Module):
             strides:Sequence[int]=(1, 1), 
             padding:Union[str, Sequence[Tuple[int, int]]]='SAME', 
             init_kernel:Initializer=he_normal(), 
-            random_key:ArrayLike=jr.key(0)):
+            random_key:jax.Array=jr.key(0)):
         self.num_channels_in = num_channels_in
         self.num_channels_out = num_channels_out
         self.window_size = window_size
@@ -141,16 +150,14 @@ class Conv(Module):
         self.padding = padding
         self.init_kernel = init_kernel
 
-        random_kernel = random_key
-        self.kernel = init_kernel(random_kernel, tuple(window_size) + (num_channels_in, num_channels_out))
-        # self.kernel = jr.normal(random_kernel, tuple(window_size) + (num_channels_in, num_channels_out))
+        self.kernel = init_kernel(random_key, tuple(window_size) + (num_channels_in, num_channels_out))
 
     def __call__(self, inputs):
         outputs = conv_general_dilated(inputs, self.kernel, self.strides, self.padding, dimension_numbers=('NHWC', 'HWIO', 'NHWC'))
         jax.debug.callback(log_conv_shape, inputs.shape, self.kernel.shape, outputs.shape)
         return outputs
 
-class LSTM(Module):
+class LSTMCell(Module):
     num_features_in:int = static_field()
     num_features_hidden:int = static_field()
 
@@ -158,11 +165,48 @@ class LSTM(Module):
         self.num_features_in = num_features_in
         self.num_features_hidden = num_features_hidden
 
-        linear_ih = partial(Linear, num_in=num_features_in, num_out=num_features_hidden)
+        linear_ih = partial(Linear, num_in=num_features_hidden, num_out=num_features_in, use_bias=True)
         linear_hh = partial(Linear, num_in=num_features_hidden, num_out=num_features_hidden)
 
+        random_wf, random_uf, random_key = jr.split(random_key, 3)
+        random_wi, random_ui, random_key = jr.split(random_key, 3)
+        random_wz, random_uz, random_key = jr.split(random_key, 3)
+        random_wo, random_uo = jr.split(random_key, 2)
 
+        self.w_f = linear_ih(random_key=random_wf)
+        self.u_f = linear_hh(random_key=random_uf)
+        self.w_i = linear_ih(random_key=random_wi)
+        self.u_i = linear_hh(random_key=random_ui)
+        self.w_z = linear_ih(random_key=random_wz)
+        self.u_z = linear_hh(random_key=random_uz)
+        self.w_o = linear_ih(random_key=random_wo)
+        self.u_o = linear_hh(random_key=random_uo)
 
+    def __call__(self, x, c, y):
+        f = sigmoid(self.w_f(x) + self.u_f(y))
+        i = sigmoid(self.w_i(x) + self.u_i(y))
+        z = tanh(self.w_z(x) + self.u_z(y))
+        o = sigmoid(self.w_o(x) + self.u_o(y))
+        c = i*z+c*f
+        y = o*tanh(c)
+        return y, c
+
+class RNN(Module):
+    def __init__(self, cell):
+        self.cell = cell
+
+    def __call__(self, inputs):
+        
+        def time_step(carry, input):
+            y, c = carry
+            y, c = self.cell(input, c, y)
+            return y, c 
+
+        carry = (jnp.zeros(self.cell.num_features_hidden, ), jnp.zeros(self.cell.num_features_hidden, ))
+
+        outputs, c = jax.lax.scan(time_step, carry, inputs)
+
+        return outputs
         
 
 class MaxPool(Module):
