@@ -46,7 +46,8 @@ def iter_modules(module:Module):
                     yield from iter_modules(item)
     
 class Linear(Module):
-    """Dense is a fully connected linear combination with bias module
+    """The Linear module is a fully connected linear combination with bias. There is
+    no activation function (see Dense)
 
     Attributes:
         num_in: 
@@ -96,7 +97,7 @@ class Linear(Module):
         else:
             return jnp.dot(x, self.weights) 
 
-class Dense(Linear):
+class LinearActivation(Linear):
     activation : Callable[[jax.Array], jax.Array] = static_field()
     def __init__(self, activation: Callable[[jax.Array], jax.Array]=linear, **kwargs):
         super().__init__(**kwargs)
@@ -116,7 +117,7 @@ class Conv(Module):
     implementation of the initializers easy (HWIO). I think it also matches 
     most popular JAX libraries.
 
-    Would it be better to just speci    fy the kernel size directly?
+    Would it be better to just specify the kernel size directly?
 
     Attributes:
         num_channels_in: 
