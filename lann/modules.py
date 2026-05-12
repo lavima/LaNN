@@ -9,7 +9,7 @@ from jax.typing import ArrayLike
 from jax.lax import conv_general_dilated
 
 from .typing import Shape
-from .activation import linear, sigmoid, tanh
+from .activation import linear, sigmoid, tanh, relu
 from .pytree import Pytree, static_field
 from .functions import max_pool, flatten
 from .initializers import Initializer, zeros, glorot_normal, he_normal
@@ -236,6 +236,10 @@ class MaxPool(Module):
 class Flatten(Module):
     def __call__(self, inputs):
         return flatten(inputs)
+
+class Relu(Module):
+    def __call__(self, inputs):
+        return relu(inputs)
 
 # Pytree implementation inspired by equinox. I don't like the code generation. 
 # Replaced for now by Pytree baseclass

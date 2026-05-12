@@ -1,5 +1,6 @@
 import logging
 import jax
+import numpy as np
 import jax.random as jr
 import jax.numpy as jnp
 import gymnasium as gym
@@ -8,7 +9,6 @@ from copy import deepcopy
 from random import random, sample
 from collections import deque
 from itertools import count
-from tensorflow.summary import scalar 
 from jax import jit, value_and_grad
 from jax.lax import scan
 from jax.tree_util import tree_map
@@ -18,9 +18,15 @@ from lann.reinforcement_learning import Transition
 
 logger = logging.getLogger(__name__)
 
-class Trainer:
+class _TrainerBase:
 
-    def __init__(self, model, loss, metric, optimizer):
+    def __init__(self, callbacks=None):
+        self._callbacks = callbacks
+
+class Trainer(_TrainerBase):
+
+    def __init__(self, model, loss, metric, optimizer, callbacks=None):
+        super().__init__(callbacks)
         self.model = model
         self.loss = loss
         self.metric = metric
@@ -73,52 +79,89 @@ class Trainer:
 
         return self.model
 
-class RLTrainer:
+class RLTrainer(_TrainerBase):
 
-    def __init__(self, environment, model, loss, optimizer, replay_buffer_size=1000000, update_rate=0.01, reward_when_truncated=True, summary_writer=None):
+    def __init__(self, environment, model, loss, optimizer, replay_buffer_size=1000000, update='soft', update_rate=0.00005, reward_when_truncated=True, summary_writer=None, callbacks=None):
+        super().__init__(callbacks)
         self.environment = environment
         self.model = model
         self.loss = loss
         self.optimizer = optimizer
         self.replay_buffer_size = replay_buffer_size
+
+        if update == 'soft' and type(update_rate) is not float:
+            raise ValueError('update_rate must be float when using soft updates')
+        elif update == 'hard' and type(update_rate) is not int:
+            raise ValueError('update_rate must be int when using hard updates')
+        elif update not in ['soft', 'hard']:
+            raise ValueError('unknown update type')
+
+        self.update = update
         self.update_rate = update_rate
         self.reward_when_truncated = reward_when_truncated
         self.summary_writer = summary_writer
 
-    def train(self, num_epochs=10, batch_size=32, epsilon_start=1.0, epsilon_end=0.1, epsilon_decay_rate=1e-3, discount_factor=0.99):
+    def train(self, num_epochs=100, batch_size=32, epsilon_start=1.0, epsilon_end=0.1, epsilon_decay_rate=1e-6, discount_factor=0.99):
 
-        def _batch_loss_and_eval(model, loss, x, y):
-            logits = model(x)
-            loss_values = loss(logits, y)
-            return jnp.mean(loss_values)
+        def _select_action(state):
+            epsilon = max(epsilon_end, epsilon_start - total_step_counter * epsilon_decay_rate)
+            if epsilon > random():
+                action = np.array(self.environment.action_space.sample())
+            else:
+                action = np.argmax(self.model(state[None, ...]), axis=1)[0]
+            return action
+
+        @jax.jit
+        def _train_step(model, target_model, optimizer_state, transition_batch):
+            def _batch_loss(model, states, actions, targets):
+                all_quality_values = model(states)
+                quality_values = jnp.take_along_axis(all_quality_values, actions[:, None], axis=1).squeeze()
+                loss_values = self.loss(targets, quality_values)
+                return jnp.mean(loss_values)
+
+            next_quality_values = jnp.max(target_model(transition_batch.next_state), axis=1)
+
+            targets = transition_batch.reward + ((1.0 - transition_batch.done) * discount_factor * next_quality_values)
+
+            loss_value, gradients = value_and_grad(_batch_loss)(model, transition_batch.state, transition_batch.action, targets)
+            updates, optimizer_state = self.optimizer.update(gradients, optimizer_state, model)
+            model = apply_updates(model, updates)
+
+            return model, optimizer_state, loss_value
+
 
         replay_buffer = deque([], self.replay_buffer_size)
-        target_model = deepcopy(self.model)
+        target_model = tree_map(jnp.array, self.model)
         
         optimizer_state = self.optimizer.init(self.model)
 
-        epsilon_counter = 0
+        total_step_counter = 0
+        loss_value = 0.0
+
 
         for epoch in range(num_epochs):
             state, _ = self.environment.reset()
-            state = jnp.array(state, dtype=jnp.float32).transpose(1, 2, 0)
+            num_lives = self.environment.unwrapped.ale.lives()
+            state = np.array(state, dtype=np.float32).transpose(1, 2, 0) / 255.0
+
+            total_reward = 0
 
             for step_count in count():
 
-                epsilon = max(epsilon_end, epsilon_start - epsilon_counter * epsilon_decay_rate)
-                epsilon_counter += 1
-                if epsilon > random():
-                    action = jnp.array(self.environment.action_space.sample())
+                action = _select_action(state) 
+                observation, reward, terminated, truncated, info = self.environment.step(action)
+                total_step_counter += 1
+
+                reward = np.clip(reward, -1.0, 1.0)
+                total_reward += reward
+
+                next_state = np.array(observation, dtype=np.float32).transpose(1, 2, 0) / 255.0
+
+                if info['lives'] < num_lives:
+                    done = np.array(1.0, dtype=np.float32)
+                    num_lives = info['lives']
                 else:
-                    action = jnp.argmax(self.model(state[None, ...]), axis=1)[0]
-                    
-
-                observation, reward, terminated, truncated, _ = self.environment.step(action)
-                reward = jnp.clip(reward, -1.0, 1.0)
-
-                next_state = jnp.array(observation, dtype=jnp.float32).transpose(1, 2, 0)
-
-                done = terminated if self.reward_when_truncated else terminated or truncated 
+                    done = np.array(terminated or truncated if self.reward_when_truncated else terminated, dtype=np.float32)
                 
                 replay_buffer.append(Transition(state, action, next_state, reward, done))
 
@@ -128,28 +171,22 @@ class RLTrainer:
                     continue
 
                 transitions = sample(replay_buffer, batch_size) 
-                batched_transitions = tree_map(lambda *xs: jnp.stack(xs), *transitions)
+                transition_batch = tree_map(lambda *xs: np.stack(xs), *transitions)
 
+                self.model, optimizer_state, loss_value = _train_step(self.model, target_model, optimizer_state, transition_batch)
 
-                quality_values = self.model(batched_transitions.state)
-                quality_values = jax.vmap(lambda v, a: v[a], in_axes=(0,0))(quality_values, batched_transitions.action)
-
-                next_quality_values = jnp.max(target_model(batched_transitions.next_state), axis=1)
-
-                targets = batched_transitions.reward + (jnp.invert(batched_transitions.done) * discount_factor * next_quality_values)
-
-                loss_value, gradients = value_and_grad(_batch_loss_and_eval)(self.model, self.loss, batched_transitions.state, targets[:, None])
-                updates, optimizer_state = self.optimizer.update(gradients, optimizer_state, self.model)
-                model = apply_updates(self.model, updates)
-
-                tree_map(lambda a, b: a*(1-self.update_rate) + b*self.update_rate, target_model, self.model)
+                if self.update == 'soft':
+                    target_model = tree_map(lambda a, b: a*(1-self.update_rate) + b*self.update_rate, target_model, self.model)
+                elif total_step_counter % self.update_rate == 0:
+                    target_model = tree_map(jnp.array, self.model)
 
                 if terminated or truncated:
                     break
 
-            # if self.summary_writer is not None:
-            #     with self.summary_writer.as_default():
-            #         scalar('loss', loss_value, step=epoch)
+
+            for callback in self._callbacks:
+                callback(self.model, epoch, loss_value, total_reward, total_step_counter)
+
 
 
 def _log_batch_loss_and_eval(x, y, logits):
